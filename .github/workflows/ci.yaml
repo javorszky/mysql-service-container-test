@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  sometest:
+    runs-on: ubuntu-latest
+    env:
+      apidir: /var/tmp/apimigration
+
+    services:
+      mysql:
+        image: mysql:8-oracle
+        env:
+          MYSQL_DATABASE: dragons
+          MYSQL_USER: alex
+          MYSQL_PASSWORD: alexisbest
+          MYSQL_ROOT_PASSWORD: herebedragons
+        volumes:
+          - /var/tmp/apimigration:/data
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Copy migration files into mounted folder
+        run: cp *.* ${{ env.apidir }}
+        working-directory: ${{ github.workspace }}/some/subdirectory
+
+      - name: Check that files are present on the host
+        run: ls
+        working-directory: ${{ env.apidir }}
+
+      - name: Check that the files show up in the mysql container
+        run: docker exec ${{ job.services.mysql.id }} ls -la /data
+
+      - name: Run migration 000
+        run: |
+          docker exec ${{ job.services.mysql.id }} \
+          mysql --verbose -u$UNAME -p$PW $DB < /data/000_migration.sql
+        env:
+          UNAME: alex
+          PW: alexisbest
+          DB: dragons
+
+      - name: Run show tables for the migrations
+        run: |
+          docker exec ${{ job.services.mysql.id }} \
+          mysql --verbose -u$UNAME -p$PW $DB --verbose --execute="show tables;"
+        env:
+          UNAME: alex
+          PW: alexisbest
+          DB: dragons
